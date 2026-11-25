@@ -42,7 +42,6 @@
 
   <div id="status" class="status hidden"></div>
 
-  <!-- STEP 1 -->
   <section class="card">
     <h2><span class="num">1</span> Crop</h2>
     <label>Crop <span class="req">*</span>
@@ -50,7 +49,6 @@
     </label>
   </section>
 
-  <!-- STEP 2 -->
   <section class="card hidden" id="step2">
     <h2><span class="num">2</span> Find &amp; confirm the record</h2>
     <label>Replication <span class="req">*</span>
@@ -65,7 +63,6 @@
     </label>
   </section>
 
-  <!-- STEP 3 -->
   <section class="card hidden" id="step3">
     <h2><span class="num">3</span> Fill in the data</h2>
     <form id="dataForm" novalidate>
@@ -99,7 +96,7 @@ async function apiGet(params) {
   return data;
 }
 
-// ---------- Step 1: load crops ----------
+// ---------- load crops ----------
 async function init() {
   try {
     config = await apiGet({ action: 'config' });
@@ -130,7 +127,7 @@ $('crop').addEventListener('change', async () => {
   }
 });
 
-// ---------- Step 2: choose Replication + Treatment ----------
+// ---------- choose Replication + Treatment ----------
 const SEP = ' | ';
 const repOf = r => r.id.split(SEP)[0];
 const trtOf = r => r.id.split(SEP)[1];
@@ -195,7 +192,7 @@ $('confirmed').addEventListener('change', () => {
   else show('step3', false);
 });
 
-// ---------- Step 3: crop-specific fields ----------
+// ---------- crop-specific fields ----------
 function currentCrop() { return config.crops.find(c => c.name === $('crop').value); }
 function currentRow()  { return rows.find(x => x.id === $('trt').value); }
 
