@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Crop Data Collection</title>
+<title>Trial Data Collection</title>
 <style>
   :root { --green:#2e7d32; --green-light:#e8f5e9; --border:#d0d7de; --text:#1f2328; --muted:#656d76; }
   * { box-sizing: border-box; }
@@ -37,7 +37,7 @@
 </head>
 <body>
 <main>
-  <h1>Crop Data Collection</h1>
+  <h1>Trial Data Collection</h1>
   <p class="sub">Find an existing record, confirm it, then fill in the missing information.</p>
 
   <div id="status" class="status hidden"></div>
@@ -77,10 +77,10 @@
 
 <script>
 // ▼▼▼ Paste your Apps Script Web App URL here (ends with /exec) ▼▼▼
-const SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+const SCRIPT_URL = 'https://script.google.com/a/macros/oathafrica.com/s/AKfycbxUECcBA0bPr3n9sLIg2k5sbWfbUxnsu9VC3ZIPQJMXpWEGj02F1nTKLwXHtnoo1OX3/exec';
 
-let config = null;   // crops + fields from Apps Script
-let rows = [];       // records of the selected crop
+let config = null;  
+let rows = []; 
 const $ = id => document.getElementById(id);
 
 function showStatus(msg, type) {
