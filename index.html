@@ -53,11 +53,11 @@
   <!-- STEP 2 -->
   <section class="card hidden" id="step2">
     <h2><span class="num">2</span> Find &amp; confirm the record</h2>
-    <label>Search (ID, farmer, district…)
-      <input id="search" placeholder="Type to filter the list">
+    <label>Replication <span class="req">*</span>
+      <select id="rep"></select>
     </label>
-    <label>Record
-      <select id="row"></select>
+    <label>Treatment <span class="req">*</span>
+      <select id="trt" disabled></select>
     </label>
     <div id="confirmBox" class="confirm hidden"></div>
     <label class="check hidden" id="confirmLabel">
@@ -120,8 +120,8 @@ $('crop').addEventListener('change', async () => {
   showStatus('Loading ' + crop + ' records…', 'info');
   try {
     rows = (await apiGet({ action: 'rows', crop })).rows;
-    $('search').value = '';
-    renderRowOptions();
+    $('trt').value = '';
+    fillRep();
     resetConfirm();
     show('step2', true);
     hideStatus();
@@ -130,37 +130,55 @@ $('crop').addEventListener('change', async () => {
   }
 });
 
-// ---------- Step 2: choose + confirm row ----------
-function rowLabel(r) {
-  const extra = config.confirmColumns
-    .filter(c => !config.idColumn.includes(c) && r.confirm[c])
-    .map(c => r.confirm[c]).join(' · ');
-  return `${r.id} — ${extra}  (${r.filled}/${r.total} filled)`;
+// ---------- Step 2: choose Replication + Treatment ----------
+// Row IDs come from Apps Script as "Rep | Trt", e.g. "R1 | T3"
+const SEP = ' | ';
+const repOf = r => r.id.split(SEP)[0];
+const trtOf = r => r.id.split(SEP)[1];
+const natural = (a, b) => a.localeCompare(b, undefined, { numeric: true }); // R2 before R10
+
+function fillRep() {
+  const sel = $('rep');
+  sel.innerHTML = '';
+  const reps = [...new Set(rows.map(repOf))].sort(natural);
+  sel.add(new Option(reps.length ? '— Select replication —' : 'No records found', ''));
+  reps.forEach(v => sel.add(new Option(v, v)));
+  fillTrt();
 }
 
-function renderRowOptions() {
-  const q = $('search').value.trim().toLowerCase();
-  const sel = $('row');
+function fillTrt() {
+  const rep = $('rep').value;
+  const sel = $('trt');
   const keep = sel.value;
   sel.innerHTML = '';
-  const matches = rows.filter(r =>
-    !q || [r.id, ...Object.values(r.confirm)].join(' ').toLowerCase().includes(q));
-  sel.add(new Option(matches.length ? `— Select record (${matches.length}) —` : 'No matching records', ''));
-  matches.forEach(r => sel.add(new Option(rowLabel(r), r.id)));
-  if (matches.some(r => r.id === keep)) sel.value = keep;
+  sel.add(new Option(rep ? '— Select treatment —' : 'Select a replication first', ''));
+  sel.disabled = !rep;
+  if (!rep) return;
+  rows.filter(r => repOf(r) === rep)
+      .sort((a, b) => natural(trtOf(a), trtOf(b)))
+      .forEach(r => {
+        const status = r.filled === r.total ? '  ✔ complete' : `  (${r.filled}/${r.total} filled)`;
+        sel.add(new Option(trtOf(r) + status, r.id));
+      });
+  if ([...sel.options].some(o => o.value === keep)) sel.value = keep;
 }
-
-$('search').addEventListener('input', () => { renderRowOptions(); if (!$('row').value) resetConfirm(); });
 
 function resetConfirm() {
   $('confirmed').checked = false;
   show('confirmBox', false); show('confirmLabel', false); show('step3', false);
 }
 
-$('row').addEventListener('change', () => {
+$('rep').addEventListener('change', () => {
   hideStatus();
   resetConfirm();
-  const r = rows.find(x => x.id === $('row').value);
+  $('trt').value = '';
+  fillTrt();
+});
+
+$('trt').addEventListener('change', () => {
+  hideStatus();
+  resetConfirm();
+  const r = currentRow();
   if (!r) return;
   const table = document.createElement('table');
   config.confirmColumns.forEach(c => {
@@ -180,7 +198,7 @@ $('confirmed').addEventListener('change', () => {
 
 // ---------- Step 3: crop-specific fields ----------
 function currentCrop() { return config.crops.find(c => c.name === $('crop').value); }
-function currentRow()  { return rows.find(x => x.id === $('row').value); }
+function currentRow()  { return rows.find(x => x.id === $('trt').value); }
 
 function renderFields() {
   const crop = currentCrop(), row = currentRow();
@@ -246,8 +264,8 @@ $('dataForm').addEventListener('submit', async e => {
     // update local copy so the list shows the new "filled" count
     Object.assign(row.current, values);
     row.filled = crop.fields.filter(f => row.current[f.name]).length;
-    renderRowOptions();
-    $('row').value = '';
+    fillTrt();               // refresh "filled" counts, keep the same replication
+    $('trt').value = '';
     resetConfirm();
     showStatus(`Saved ✔ ${crop.name} record ${row.id} updated (sheet row ${data.row}).`, 'success');
   } catch (err) {
