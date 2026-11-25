@@ -76,7 +76,7 @@
 </main>
 
 <script>
-// ▼▼▼ Paste your Apps Script Web App URL here (ends with /exec) ▼▼▼
+// ▼▼▼ Apps Script Web App URL here (ends with /exec) ▼▼▼
 const SCRIPT_URL = 'https://script.google.com/a/macros/oathafrica.com/s/AKfycbxUECcBA0bPr3n9sLIg2k5sbWfbUxnsu9VC3ZIPQJMXpWEGj02F1nTKLwXHtnoo1OX3/exec';
 
 let config = null;  
@@ -131,7 +131,6 @@ $('crop').addEventListener('change', async () => {
 });
 
 // ---------- Step 2: choose Replication + Treatment ----------
-// Row IDs come from Apps Script as "Rep | Trt", e.g. "R1 | T3"
 const SEP = ' | ';
 const repOf = r => r.id.split(SEP)[0];
 const trtOf = r => r.id.split(SEP)[1];
