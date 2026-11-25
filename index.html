@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crop Data Collection</title>
+<style>
+  :root { --green:#2e7d32; --green-light:#e8f5e9; --border:#d0d7de; --text:#1f2328; --muted:#656d76; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:#f6f8f6; color:var(--text); }
+  main { max-width: 640px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { margin: 8px 0 4px; font-size: 1.5rem; color: var(--green); }
+  .sub { margin: 0 0 20px; color: var(--muted); }
+  .card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  h2 { font-size:1.05rem; margin:0 0 14px; display:flex; align-items:center; gap:10px; }
+  .num { background:var(--green); color:#fff; width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:.85rem; }
+  label { display:block; font-weight:600; font-size:.9rem; margin-bottom:12px; }
+  label .req { color:#c62828; }
+  input, select, textarea { display:block; width:100%; margin-top:6px; padding:10px 12px; font-size:1rem; border:1px solid var(--border); border-radius:8px; background:#fff; font-family:inherit; }
+  textarea { min-height:80px; resize:vertical; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--green); border-color:var(--green); }
+  .confirm { background:var(--green-light); border-radius:8px; padding:12px; margin-bottom:12px; }
+  .confirm table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  .confirm td { padding:4px 0; vertical-align:top; }
+  .confirm td:first-child { color:var(--muted); width:40%; }
+  label.check { display:flex; align-items:center; gap:10px; font-weight:600; }
+  label.check input { width:20px; height:20px; margin:0; }
+  .current { font-weight:400; font-size:.8rem; color:var(--muted); margin-top:4px; }
+  button { width:100%; padding:13px; font-size:1rem; font-weight:600; border:0; border-radius:8px; background:var(--green); color:#fff; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:wait; }
+  .status { padding:12px 14px; border-radius:8px; margin-bottom:16px; font-size:.95rem; }
+  .status.info { background:#e3f2fd; color:#0d47a1; }
+  .status.success { background:var(--green-light); color:#1b5e20; }
+  .status.error { background:#ffebee; color:#b71c1c; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Crop Data Collection</h1>
+  <p class="sub">Find an existing record, confirm it, then fill in the missing information.</p>
+
+  <div id="status" class="status hidden"></div>
+
+  <!-- STEP 1 -->
+  <section class="card">
+    <h2><span class="num">1</span> Crop</h2>
+    <label>Crop <span class="req">*</span>
+      <select id="crop"><option value="">Loading…</option></select>
+    </label>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="card hidden" id="step2">
+    <h2><span class="num">2</span> Find &amp; confirm the record</h2>
+    <label>Search (ID, farmer, district…)
+      <input id="search" placeholder="Type to filter the list">
+    </label>
+    <label>Record
+      <select id="row"></select>
+    </label>
+    <div id="confirmBox" class="confirm hidden"></div>
+    <label class="check hidden" id="confirmLabel">
+      <input type="checkbox" id="confirmed"> Yes, this is the correct record
+    </label>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="card hidden" id="step3">
+    <h2><span class="num">3</span> Fill in the missing data</h2>
+    <form id="dataForm" novalidate>
+      <div id="fields"></div>
+      <button type="submit" id="submitBtn">Submit</button>
+    </form>
+  </section>
+</main>
+
+<script>
+// ▼▼▼ Paste your Apps Script Web App URL here (ends with /exec) ▼▼▼
+const SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+
+let config = null;   // crops + fields from Apps Script
+let rows = [];       // records of the selected crop
+const $ = id => document.getElementById(id);
+
+function showStatus(msg, type) {
+  const s = $('status');
+  s.textContent = msg;
+  s.className = 'status ' + (type || 'info');
+  s.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function hideStatus() { $('status').className = 'status hidden'; }
+function show(id, on) { $(id).classList.toggle('hidden', !on); }
+
+async function apiGet(params) {
+  const res = await fetch(SCRIPT_URL + '?' + new URLSearchParams(params));
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error);
+  return data;
+}
+
+// ---------- Step 1: load crops ----------
+async function init() {
+  try {
+    config = await apiGet({ action: 'config' });
+    const sel = $('crop');
+    sel.innerHTML = '';
+    sel.add(new Option('— Select crop —', ''));
+    config.crops.forEach(c => sel.add(new Option(c.name, c.name)));
+  } catch (err) {
+    showStatus('Could not load the form setup: ' + err.message, 'error');
+  }
+}
+
+$('crop').addEventListener('change', async () => {
+  hideStatus();
+  show('step2', false); show('step3', false);
+  const crop = $('crop').value;
+  if (!crop) return;
+  showStatus('Loading ' + crop + ' records…', 'info');
+  try {
+    rows = (await apiGet({ action: 'rows', crop })).rows;
+    $('search').value = '';
+    renderRowOptions();
+    resetConfirm();
+    show('step2', true);
+    hideStatus();
+  } catch (err) {
+    showStatus('Could not load records: ' + err.message, 'error');
+  }
+});
+
+// ---------- Step 2: choose + confirm row ----------
+function rowLabel(r) {
+  const extra = config.confirmColumns
+    .filter(c => !config.idColumn.includes(c) && r.confirm[c])
+    .map(c => r.confirm[c]).join(' · ');
+  return `${r.id} — ${extra}  (${r.filled}/${r.total} filled)`;
+}
+
+function renderRowOptions() {
+  const q = $('search').value.trim().toLowerCase();
+  const sel = $('row');
+  const keep = sel.value;
+  sel.innerHTML = '';
+  const matches = rows.filter(r =>
+    !q || [r.id, ...Object.values(r.confirm)].join(' ').toLowerCase().includes(q));
+  sel.add(new Option(matches.length ? `— Select record (${matches.length}) —` : 'No matching records', ''));
+  matches.forEach(r => sel.add(new Option(rowLabel(r), r.id)));
+  if (matches.some(r => r.id === keep)) sel.value = keep;
+}
+
+$('search').addEventListener('input', () => { renderRowOptions(); if (!$('row').value) resetConfirm(); });
+
+function resetConfirm() {
+  $('confirmed').checked = false;
+  show('confirmBox', false); show('confirmLabel', false); show('step3', false);
+}
+
+$('row').addEventListener('change', () => {
+  hideStatus();
+  resetConfirm();
+  const r = rows.find(x => x.id === $('row').value);
+  if (!r) return;
+  const table = document.createElement('table');
+  config.confirmColumns.forEach(c => {
+    const tr = table.insertRow();
+    tr.insertCell().textContent = c.replace(/_/g, ' ');
+    tr.insertCell().textContent = r.confirm[c] || '—';
+  });
+  $('confirmBox').innerHTML = '';
+  $('confirmBox').appendChild(table);
+  show('confirmBox', true); show('confirmLabel', true);
+});
+
+$('confirmed').addEventListener('change', () => {
+  if ($('confirmed').checked) { renderFields(); show('step3', true); }
+  else show('step3', false);
+});
+
+// ---------- Step 3: crop-specific fields ----------
+function currentCrop() { return config.crops.find(c => c.name === $('crop').value); }
+function currentRow()  { return rows.find(x => x.id === $('row').value); }
+
+function renderFields() {
+  const crop = currentCrop(), row = currentRow();
+  const box = $('fields');
+  box.innerHTML = '';
+  crop.fields.forEach(f => {
+    const label = document.createElement('label');
+    label.append(f.label + ' ');
+    if (f.required) { const s = document.createElement('span'); s.className = 'req'; s.textContent = '*'; label.append(s); }
+
+    let input;
+    if (f.type === 'select') {
+      input = document.createElement('select');
+      input.add(new Option('— Select —', ''));
+      f.options.forEach(o => input.add(new Option(o, o)));
+    } else if (f.type === 'textarea') {
+      input = document.createElement('textarea');
+    } else {
+      input = document.createElement('input');
+      input.type = f.type || 'text';
+      if (f.step !== undefined) input.step = f.step;
+      if (f.min  !== undefined) input.min  = f.min;
+      if (f.type === 'number') input.inputMode = 'decimal';
+    }
+    input.name = f.name;
+    input.required = !!f.required;
+    const existing = row.current[f.name] || '';
+    input.value = existing;
+    label.appendChild(input);
+
+    if (existing) {
+      const note = document.createElement('div');
+      note.className = 'current';
+      note.textContent = 'Already in sheet: ' + existing + ' (changing it will overwrite)';
+      label.appendChild(note);
+    }
+    box.appendChild(label);
+  });
+}
+
+$('dataForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const crop = currentCrop(), row = currentRow();
+  const values = {};
+  for (const f of crop.fields) {
+    const el = $('dataForm').elements[f.name];
+    const v = el.value.trim();
+    if (f.required && !v) { showStatus(`"${f.label}" is required.`, 'error'); el.focus(); return; }
+    values[f.name] = v;
+  }
+
+  const btn = $('submitBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    // Plain-text body avoids a CORS preflight, which Apps Script can't answer
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ crop: crop.name, id: row.id, values })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    // update local copy so the list shows the new "filled" count
+    Object.assign(row.current, values);
+    row.filled = crop.fields.filter(f => row.current[f.name]).length;
+    renderRowOptions();
+    $('row').value = '';
+    resetConfirm();
+    showStatus(`Saved ✔ ${crop.name} record ${row.id} updated (sheet row ${data.row}).`, 'success');
+  } catch (err) {
+    showStatus('Not saved: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submit';
+  }
+});
+
+init();
+</script>
+</body>
+</html>
